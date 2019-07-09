@@ -14,6 +14,21 @@ class ViewController: UIViewController {
     @IBOutlet weak var metalView: MTKView!
     private var device: MTLDevice!
     private var commandQueue: MTLCommandQueue!
+
+    private var vertexBuffer : MTLBuffer!
+    private var indicesBuffer : MTLBuffer!
+    
+    private var pipelineState: MTLRenderPipelineState!
+
+    
+    var indices: [UInt32] = [0, 1, 2, 2, 3, 0]
+
+    var vertices = [
+        Vertex(x:  1, y: -1, z: 0, r: 1, g: 0, b: 0, a: 1),
+        Vertex(x:  1, y:  1, z: 0, r: 0, g: 1, b: 0, a: 1),
+        Vertex(x: -1, y:  1, z: 0, r: 0, g: 0, b: 1, a: 1),
+        Vertex(x: -1, y: -1, z: 0, r: 0, g: 0, b: 0, a: 1),
+    ]
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -25,6 +40,23 @@ class ViewController: UIViewController {
     func setMetal() {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device.makeCommandQueue()
+        
+        let vertexBufferSize = vertices.size()
+        vertexBuffer = device.makeBuffer(bytes: &vertices, length: vertexBufferSize, options: .storageModeShared)
+        
+        let indicesBufferSize = indices.size()
+        indicesBuffer = device.makeBuffer(bytes: &indices, length: indicesBufferSize, options: .storageModeShared)
+        
+        let defaultLibrary = device.makeDefaultLibrary()!
+        let fragmentProgram = defaultLibrary.makeFunction(name: "basic_fragment")
+        let vertexProgram = defaultLibrary.makeFunction(name: "basic_vertex")
+        
+        let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
+        pipelineStateDescriptor.vertexFunction = vertexProgram
+        pipelineStateDescriptor.fragmentFunction = fragmentProgram
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        
+        pipelineState = try! device.makeRenderPipelineState(descriptor: pipelineStateDescriptor)
     }
 
 }
@@ -50,9 +82,26 @@ extension ViewController: MTKViewDelegate {
             .makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
                 return
         }
+        
+        renderEncoder.setRenderPipelineState(pipelineState)
+        
+        renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        renderEncoder.drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: indices.count,
+            indexType: .uint32,
+            indexBuffer: indicesBuffer,
+            indexBufferOffset: 0)
+
         renderEncoder.endEncoding()
         
         commandBuffer.present(drawable)
         commandBuffer.commit()
+    }
+}
+
+extension Array {
+    func size() -> Int {
+        return count * MemoryLayout.size(ofValue: self[0])
     }
 }
